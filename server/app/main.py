@@ -1,19 +1,31 @@
 from collections import defaultdict
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
+
+from app.recognizer import recognizer
 
 
 class Point(BaseModel):
-    x: float
-    y: float
+    x: Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
+    y: Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
+
+
+Stroke = Annotated[list[Point], Field(min_length=1, max_length=2048)]
 
 
 class CastMessage(BaseModel):
     type: Literal["cast"]
-    strokes: list[list[Point]]
+    strokes: Annotated[list[Stroke], Field(min_length=1, max_length=8)]
+    aspect_ratio: float = Field(
+        default=1.0,
+        alias="aspectRatio",
+        gt=0.0,
+        le=10.0,
+        allow_inf_nan=False,
+    )
 
 
 class RoomManager:
@@ -85,15 +97,33 @@ async def game_socket(websocket: WebSocket, room_id: str, player_id: str) -> Non
                 )
                 continue
 
-            spell_id = str(uuid4())
-            drawing_type = "mock_spell"
+            recognition = recognizer.recognize(
+                [
+                    [(point.x, point.y) for point in stroke]
+                    for stroke in cast.strokes
+                ],
+                aspect_ratio=cast.aspect_ratio,
+            )
 
+            if not recognition.accepted:
+                await websocket.send_json(
+                    {
+                        "type": "cast_result",
+                        "accepted": False,
+                        "score": recognition.score,
+                        "reason": recognition.reason,
+                    }
+                )
+                continue
+
+            spell_id = str(uuid4())
             await websocket.send_json(
                 {
                     "type": "cast_result",
                     "accepted": True,
                     "spellId": spell_id,
-                    "drawingType": drawing_type,
+                    "drawingType": recognition.drawing_type,
+                    "score": recognition.score,
                 }
             )
             await rooms.send_to_opponents(
@@ -101,7 +131,7 @@ async def game_socket(websocket: WebSocket, room_id: str, player_id: str) -> Non
                 player_id,
                 {
                     "type": "effect",
-                    "effect": drawing_type,
+                    "effect": recognition.drawing_type,
                     "spellId": spell_id,
                     "sourcePlayerId": player_id,
                     "strokes": [

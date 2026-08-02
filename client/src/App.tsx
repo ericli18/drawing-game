@@ -3,6 +3,13 @@ import './App.css'
 
 type CameraState = 'requesting' | 'ready' | 'blocked'
 type ServerState = 'connecting' | 'connected' | 'offline'
+type NoticeTone = 'checking' | 'success' | 'error' | 'opponent'
+
+type Notice = {
+  tone: NoticeTone
+  title: string
+  detail: string
+}
 
 type Point = {
   x: number
@@ -17,6 +24,11 @@ const CameraOffIcon = () => (
   </svg>
 )
 
+const formatSpellName = (name?: string) => {
+  if (!name) return 'Spell'
+  return name.charAt(0).toUpperCase() + name.slice(1).replaceAll('_', ' ')
+}
+
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -30,7 +42,7 @@ function App() {
   const [cameraState, setCameraState] = useState<CameraState>('requesting')
   const [hasDrawing, setHasDrawing] = useState(false)
   const [isCasting, setIsCasting] = useState(false)
-  const [announcement, setAnnouncement] = useState('')
+  const [notice, setNotice] = useState<Notice | null>(null)
   const [serverState, setServerState] = useState<ServerState>('connecting')
 
   const drawStroke = useCallback(
@@ -202,20 +214,44 @@ function App() {
         accepted?: boolean
         drawingType?: string
         effect?: string
+        reason?: string
       }
 
-      if (message.type === 'cast_result' && message.accepted) {
-        setAnnouncement(`${message.drawingType} approved`)
-        castTimeoutRef.current = window.setTimeout(() => {
-          clearDrawing()
+      if (message.type === 'cast_result') {
+        if (message.accepted) {
+          setNotice({
+            tone: 'success',
+            title: `${formatSpellName(message.drawingType)} applied`,
+            detail: 'Your opponent received the spell effect.',
+          })
+          castTimeoutRef.current = window.setTimeout(() => {
+            clearDrawing()
+            setIsCasting(false)
+          }, 650)
+        } else {
           setIsCasting(false)
-          setAnnouncement('Canvas cleared. Draw your next spell.')
-        }, 650)
+          setNotice({
+            tone: 'error',
+            title: 'Spell rejected',
+            detail:
+              message.reason === 'ambiguous'
+                ? 'The shape is too close to multiple spells. Adjust it and try again.'
+                : 'The shape was not recognized. Adjust it and try again.',
+          })
+        }
       } else if (message.type === 'effect') {
-        setAnnouncement(`Opponent cast ${message.effect}`)
+        setNotice({
+          tone: 'opponent',
+          title: `Incoming ${formatSpellName(message.effect)}`,
+          detail: 'Your opponent applied a spell effect.',
+        })
       } else if (message.type === 'error') {
         setIsCasting(false)
-        setAnnouncement('The server could not read that spell.')
+        setNotice({
+          tone: 'error',
+          title: 'Cast failed',
+          detail: 'The server could not read that spell.',
+        })
       }
     })
 
@@ -229,14 +265,31 @@ function App() {
     if (!hasDrawing || isCasting) return
 
     const socket = socketRef.current
+    const canvas = canvasRef.current
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-      setAnnouncement('The spell server is offline.')
+      setNotice({
+        tone: 'error',
+        title: 'Arena offline',
+        detail: 'Reconnect before casting another spell.',
+      })
       return
     }
+    if (!canvas) return
 
     setIsCasting(true)
-    setAnnouncement('Checking spell…')
-    socket.send(JSON.stringify({ type: 'cast', strokes: strokesRef.current }))
+    setNotice({
+      tone: 'checking',
+      title: 'Reading spell…',
+      detail: 'The server is checking your drawing.',
+    })
+    const bounds = canvas.getBoundingClientRect()
+    socket.send(
+      JSON.stringify({
+        type: 'cast',
+        strokes: strokesRef.current,
+        aspectRatio: bounds.width / bounds.height,
+      }),
+    )
   }
 
   return (
@@ -259,6 +312,38 @@ function App() {
             ? 'Connecting to arena…'
             : 'Arena offline'}
       </p>
+
+      {notice ? (
+        <section
+          className={`cast-notice cast-notice--${notice.tone}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <span className="cast-notice__icon" aria-hidden="true">
+            {notice.tone === 'checking' ? (
+              <span className="cast-notice__spinner" />
+            ) : notice.tone === 'success' ? (
+              <svg viewBox="0 0 24 24">
+                <path d="m6.5 12.5 3.2 3.2 7.8-8" />
+              </svg>
+            ) : notice.tone === 'opponent' ? (
+              <svg viewBox="0 0 24 24">
+                <path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z" />
+                <path d="m18.5 16 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24">
+                <path d="m8 8 8 8M16 8l-8 8" />
+              </svg>
+            )}
+          </span>
+          <span className="cast-notice__copy">
+            <strong>{notice.title}</strong>
+            <span>{notice.detail}</span>
+          </span>
+        </section>
+      ) : null}
 
       {cameraState !== 'ready' ? (
         <section className="camera-message" aria-live="polite">
@@ -311,10 +396,6 @@ function App() {
           {isCasting ? 'Casting…' : 'Cast spell'}
         </button>
       </div>
-
-      <p className="sr-only" aria-live="polite">
-        {announcement}
-      </p>
     </main>
   )
 }

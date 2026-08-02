@@ -67,6 +67,122 @@
   background: #ff6b62;
 }
 
+.cast-notice {
+  position: absolute;
+  z-index: 4;
+  top: calc(max(16px, env(safe-area-inset-top)) + 46px);
+  left: 50%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: min(410px, calc(100% - 32px));
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 18px;
+  background: rgba(10, 12, 15, 0.82);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.38);
+  transform: translateX(-50%);
+  animation: cast-notice-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.cast-notice__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  color: #f0b94c;
+  background: rgba(240, 185, 76, 0.12);
+}
+
+.cast-notice__icon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.cast-notice__spinner {
+  width: 17px;
+  height: 17px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: cast-notice-spin 700ms linear infinite;
+}
+
+.cast-notice__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.cast-notice__copy strong {
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+}
+
+.cast-notice__copy > span {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.cast-notice--success {
+  border-color: rgba(215, 255, 63, 0.26);
+}
+
+.cast-notice--success .cast-notice__icon {
+  color: #d7ff3f;
+  background: rgba(215, 255, 63, 0.12);
+}
+
+.cast-notice--error {
+  border-color: rgba(255, 107, 98, 0.28);
+}
+
+.cast-notice--error .cast-notice__icon {
+  color: #ff8178;
+  background: rgba(255, 107, 98, 0.13);
+}
+
+.cast-notice--opponent {
+  border-color: rgba(125, 211, 252, 0.26);
+}
+
+.cast-notice--opponent .cast-notice__icon {
+  color: #8edcff;
+  background: rgba(125, 211, 252, 0.12);
+}
+
+@keyframes cast-notice-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes cast-notice-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .drawing-layer {
   z-index: 1;
   cursor: crosshair;
@@ -208,18 +324,6 @@
   background: #d7ff3f;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 @media (max-width: 560px) {
   .controls {
     right: max(16px, env(safe-area-inset-right));
@@ -241,7 +345,10 @@
 @media (prefers-reduced-motion: reduce) {
   .drawing-layer,
   .control-button,
-  .retry-button {
+  .retry-button,
+  .cast-notice,
+  .cast-notice__spinner {
     transition: none;
+    animation: none;
   }
 }
