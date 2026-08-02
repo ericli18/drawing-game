@@ -9,6 +9,12 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] })
   ],
   server: {
-    allowedHosts: ['leotard-deviant-mug.ngrok-free.dev']
+    allowedHosts: ['leotard-deviant-mug.ngrok-free.dev'],
+    proxy: {
+      '/ws': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+      },
+    },
   }
 })

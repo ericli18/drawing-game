@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 
 type CameraState = 'requesting' | 'ready' | 'blocked'
+type ServerState = 'connecting' | 'connected' | 'offline'
 
 type Point = {
   x: number
@@ -24,11 +25,13 @@ function App() {
   const activeStrokeRef = useRef<Stroke | null>(null)
   const castTimeoutRef = useRef<number | null>(null)
   const cameraRequestRef = useRef(0)
+  const socketRef = useRef<WebSocket | null>(null)
 
   const [cameraState, setCameraState] = useState<CameraState>('requesting')
   const [hasDrawing, setHasDrawing] = useState(false)
   const [isCasting, setIsCasting] = useState(false)
   const [announcement, setAnnouncement] = useState('')
+  const [serverState, setServerState] = useState<ServerState>('connecting')
 
   const drawStroke = useCallback(
     (context: CanvasRenderingContext2D, stroke: Stroke) => {
@@ -176,16 +179,64 @@ function App() {
     redrawCanvas()
   }, [redrawCanvas])
 
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const defaultUrl = `${protocol}://${window.location.host}/ws/demo-room/player-one`
+    const socket = new WebSocket(import.meta.env.VITE_WS_URL ?? defaultUrl)
+    socketRef.current = socket
+
+    socket.addEventListener('open', () => {
+      if (socketRef.current === socket) setServerState('connected')
+    })
+    socket.addEventListener('close', () => {
+      if (socketRef.current === socket) setServerState('offline')
+    })
+    socket.addEventListener('error', () => {
+      if (socketRef.current === socket) setServerState('offline')
+    })
+    socket.addEventListener('message', (event) => {
+      if (socketRef.current !== socket) return
+
+      const message = JSON.parse(event.data) as {
+        type: string
+        accepted?: boolean
+        drawingType?: string
+        effect?: string
+      }
+
+      if (message.type === 'cast_result' && message.accepted) {
+        setAnnouncement(`${message.drawingType} approved`)
+        castTimeoutRef.current = window.setTimeout(() => {
+          clearDrawing()
+          setIsCasting(false)
+          setAnnouncement('Canvas cleared. Draw your next spell.')
+        }, 650)
+      } else if (message.type === 'effect') {
+        setAnnouncement(`Opponent cast ${message.effect}`)
+      } else if (message.type === 'error') {
+        setIsCasting(false)
+        setAnnouncement('The server could not read that spell.')
+      }
+    })
+
+    return () => {
+      if (socketRef.current === socket) socketRef.current = null
+      socket.close()
+    }
+  }, [clearDrawing])
+
   const castSpell = () => {
     if (!hasDrawing || isCasting) return
 
+    const socket = socketRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setAnnouncement('The spell server is offline.')
+      return
+    }
+
     setIsCasting(true)
-    setAnnouncement('Spell cast')
-    castTimeoutRef.current = window.setTimeout(() => {
-      clearDrawing()
-      setIsCasting(false)
-      setAnnouncement('Canvas cleared. Draw your next spell.')
-    }, 650)
+    setAnnouncement('Checking spell…')
+    socket.send(JSON.stringify({ type: 'cast', strokes: strokesRef.current }))
   }
 
   return (
@@ -200,6 +251,14 @@ function App() {
       />
 
       <div className="camera-shade" aria-hidden="true" />
+
+      <p className={`server-status server-status--${serverState}`}>
+        {serverState === 'connected'
+          ? 'Arena connected'
+          : serverState === 'connecting'
+            ? 'Connecting to arena…'
+            : 'Arena offline'}
+      </p>
 
       {cameraState !== 'ready' ? (
         <section className="camera-message" aria-live="polite">
@@ -247,7 +306,7 @@ function App() {
           className="control-button control-button--cast"
           type="button"
           onClick={castSpell}
-          disabled={!hasDrawing || isCasting}
+          disabled={!hasDrawing || isCasting || serverState !== 'connected'}
         >
           {isCasting ? 'Casting…' : 'Cast spell'}
         </button>

@@ -1,0 +1,1 @@
+"""Drawing Spells server package."""
