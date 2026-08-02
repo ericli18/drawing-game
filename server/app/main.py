@@ -496,7 +496,7 @@ REASON_MESSAGES = {
     "game_not_finished": "A rematch can only be requested after the game.",
     "opponent_disconnected": "Wait for the other player to reconnect.",
     "opponent_missing": "The room needs another player.",
-    "out_of_ammo": "Draw a loop to reload.",
+    "out_of_ammo": "Draw an up arrow to reload.",
     "player_defeated": "A defeated player cannot act.",
     "players_not_ready": "Both players must be ready.",
     "rematch_already_requested": "Rematch already requested.",

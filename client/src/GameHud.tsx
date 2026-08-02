@@ -88,7 +88,7 @@ export function PlayerVitals({
 
 export function AmmoMeter({
   ammo,
-  maxAmmo = 6,
+  maxAmmo = 12,
   label = 'Ammo',
   className,
 }: AmmoMeterProps) {

@@ -27,12 +27,7 @@ const GLYPHS: Record<SpellKind, ReactNode> = {
     <path d="m12 3.5 2.5 5.1 5.7.8-4.1 4 1 5.6-5.1-2.7L6.9 19l1-5.6-4.1-4 5.7-.8L12 3.5Z" />
   ),
   triangle: <path d="m12 4 8 15H4l8-15Z" />,
-  loop: (
-    <>
-      <path d="M16.7 15.7a7 7 0 1 1 0-9.9 7 7 0 0 1 0 9.9Z" />
-      <path d="m16.8 15.8 3.7 3.7" />
-    </>
-  ),
+  loop: <path d="M12 20V4m-6 6 6-6 6 6" />,
 }
 
 export function SpellGlyph({ spell, label, className }: SpellGlyphProps) {

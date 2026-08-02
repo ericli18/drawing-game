@@ -1,9 +1,9 @@
 import asyncio
-from math import cos, pi, sin
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.game import MAX_AMMO
 from app.main import RoomManager, app, rooms
 
 
@@ -13,18 +13,14 @@ PLUS_STROKES = [
     [{"x": 0.5, "y": 0.2}, {"x": 0.5, "y": 0.8}],
     [{"x": 0.2, "y": 0.5}, {"x": 0.8, "y": 0.5}],
 ]
-LOOP_STROKES = [
+RELOAD_STROKES = [
+    [{"x": 0.5, "y": 0.84}, {"x": 0.5, "y": 0.16}],
     [
-        {
-            "x": 0.44 + 0.28 * cos(pi / 4 + 2 * pi * index / 24),
-            "y": 0.39 + 0.28 * sin(pi / 4 + 2 * pi * index / 24),
-        }
-        for index in range(25)
-    ]
+        {"x": 0.2, "y": 0.44},
+        {"x": 0.5, "y": 0.16},
+        {"x": 0.8, "y": 0.44},
+    ],
 ]
-LOOP_STROKES[0].extend(
-    [{"x": 0.78, "y": 0.68}, {"x": 0.86, "y": 0.78}]
-)
 
 
 @pytest.fixture(autouse=True)
@@ -302,7 +298,7 @@ def test_cast_fire_and_damage_event_use_authoritative_state(monkeypatch) -> None
         player_one.send_json({"type": "fire", "targetLocked": True})
         event, state = _receive_broadcast(player_one, player_two)
         assert event["damagedPlayerId"] == "player-two"
-        assert state["players"][0]["ammo"] == 5
+        assert state["players"][0]["ammo"] == MAX_AMMO - 1
         assert state["players"][1]["health"] == 88
 
 
@@ -337,7 +333,7 @@ def test_fire_without_target_lock_misses_but_spends_ammo() -> None:
         event, state = _receive_broadcast(player_one, player_two)
         assert event["outcome"] == "missed"
         assert "damagedPlayerId" not in event
-        assert state["players"][0]["ammo"] == 5
+        assert state["players"][0]["ammo"] == MAX_AMMO - 1
         assert state["players"][1]["health"] == 100
 
 
@@ -388,14 +384,14 @@ def test_rematch_resets_and_starts_a_new_countdown(monkeypatch) -> None:
         for _ in range(6):
             player_one.send_json({"type": "fire", "targetLocked": True})
             _receive_broadcast(player_one, player_two)
-            clock[0] += 800
-        player_one.send_json({"type": "cast", "strokes": LOOP_STROKES})
+            clock[0] += 400
+        player_one.send_json({"type": "cast", "strokes": RELOAD_STROKES})
         assert player_one.receive_json()["accepted"] is True
         _receive_broadcast(player_one, player_two)
         for _ in range(3):
             player_one.send_json({"type": "fire", "targetLocked": True})
             _, state = _receive_broadcast(player_one, player_two)
-            clock[0] += 800
+            clock[0] += 400
         assert state["phase"] == "finished"
 
         player_one.send_json({"type": "rematch"})

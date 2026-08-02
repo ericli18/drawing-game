@@ -325,14 +325,13 @@ def _triangle(
     return [top, bottom_right, bottom_left, top]
 
 
-def _lasso(
-    center: tuple[float, float],
-    radii: tuple[float, float],
-    phase: float,
-    tail_end: tuple[float, float],
-) -> list[tuple[float, float]]:
-    loop = _circle(center, radii, phase)
-    return [*loop, *_line(loop[-1], tail_end, count=4)[1:]]
+def _up_arrow(
+    bottom: tuple[float, float],
+    tip: tuple[float, float],
+    left: tuple[float, float],
+    right: tuple[float, float],
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    return _line(bottom, tip), [left, tip, right]
 
 
 def _templates() -> Iterable[PointCloud]:
@@ -386,15 +385,15 @@ def _templates() -> Iterable[PointCloud]:
     for top, bottom_right, bottom_left in triangles:
         yield PointCloud("triangle", (_triangle(top, bottom_right, bottom_left),))
 
-    lassos = (
-        ((0.44, 0.39), (0.28, 0.28), pi / 4, (0.86, 0.78)),
-        ((0.43, 0.40), (0.27, 0.29), pi / 4 + 0.06, (0.84, 0.80)),
-        ((0.45, 0.38), (0.29, 0.27), pi / 4 - 0.05, (0.88, 0.76)),
-        ((0.42, 0.41), (0.27, 0.27), pi / 4 + 0.10, (0.83, 0.82)),
-        ((0.46, 0.40), (0.28, 0.29), pi / 4 - 0.09, (0.87, 0.81)),
+    up_arrows = (
+        ((0.50, 0.84), (0.50, 0.16), (0.20, 0.44), (0.80, 0.44)),
+        ((0.49, 0.85), (0.51, 0.15), (0.19, 0.43), (0.81, 0.45)),
+        ((0.52, 0.82), (0.49, 0.17), (0.21, 0.46), (0.78, 0.42)),
+        ((0.48, 0.86), (0.50, 0.14), (0.18, 0.42), (0.83, 0.44)),
+        ((0.51, 0.83), (0.48, 0.18), (0.22, 0.45), (0.79, 0.47)),
     )
-    for center, radii, phase, tail_end in lassos:
-        yield PointCloud("loop", (_lasso(center, radii, phase, tail_end),))
+    for bottom, tip, left, right in up_arrows:
+        yield PointCloud("loop", _up_arrow(bottom, tip, left, right))
 
 
 recognizer = QDollarRecognizer(tuple(_templates()))

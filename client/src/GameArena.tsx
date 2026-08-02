@@ -43,7 +43,7 @@ const TIMING = {
   resultAnnouncement: 520,
 }
 
-const MAX_AMMO = 6
+const MAX_AMMO = 12
 const MAX_HEALTH = 100
 const SPELLS: readonly Spell[] = [
   'plus',
@@ -120,7 +120,7 @@ export interface GameArenaProps {
 }
 
 function rejectionCopy(reason?: string) {
-  if (reason === 'out_of_ammo') return 'Draw the reload loop before firing again.'
+  if (reason === 'out_of_ammo') return 'Draw the up arrow before firing again.'
   if (reason === 'fire_rate_limited') return 'Your blaster is still cycling.'
   if (reason === 'game_not_active') return 'Wait for your rival to join.'
   if (reason === 'players_not_ready') return 'Both cameras must be ready.'
@@ -440,7 +440,7 @@ export function GameArena({
 
     if (!canFire) {
       if ((localPlayer?.ammo ?? 0) === 0) {
-        showNotice('Blaster empty', 'Draw the reload loop.', 'danger')
+        showNotice('Blaster empty', 'Draw the up arrow.', 'danger')
       } else if (!matchLive) {
         showNotice('Hold fire', 'The duel has not started yet.')
       } else if ((localPlayer?.nextShotAt ?? 0) > now) {

@@ -165,13 +165,15 @@ def test_fire_damages_opponent_consumes_ammo_and_enforces_base_rate() -> None:
     assert first.event["outcome"] == "hit"
     assert first.event["damaged_player_id"] == "two"
 
-    too_soon = fire(first.state, "one", 1_799)
+    too_soon = fire(
+        first.state, "one", 1_000 + BASE_SHOT_INTERVAL_MS - 1
+    )
     assert not too_soon.accepted
     assert too_soon.reason == "fire_rate_limited"
     assert too_soon.retry_after_ms == 1
     assert too_soon.state is first.state
 
-    ready = fire(first.state, "one", 1_800)
+    ready = fire(first.state, "one", 1_000 + BASE_SHOT_INTERVAL_MS)
     assert ready.accepted
 
 

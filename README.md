@@ -18,7 +18,7 @@ stay on each device.
    the private on-device target scan to become ready.
 4. Once both players are ready, a server-timed three-second countdown begins.
 5. Keep one rival centered and use **Fire** (or <kbd>Space</kbd>) to shoot. Each
-   blaster holds six shots, and unlocked shots miss but still spend ammo.
+   blaster holds 12 shots, and unlocked shots miss but still spend ammo.
 6. Draw a glyph directly on the camera view at any time, then cast with
    **Cast glyph** or <kbd>Enter</kbd>; clear with **Clear** or <kbd>Escape</kbd>.
 
@@ -29,10 +29,9 @@ stay on each device.
 | Circle | Blocks incoming shots | 4s | 14s |
 | Star | Whites out the rival's screen | 2.25s | 15s |
 | Triangle | Reflects incoming shots | 4s | 16s |
-| Lasso loop | Refills all six shots | Instant | 5s |
+| Up arrow | Refills all 12 shots | Instant | 5s |
 
-The reload glyph is deliberately a closed loop with a short lower-right tail,
-which keeps it distinct from the shield circle.
+Draw the reload glyph as an upward shaft followed by the arrowhead.
 
 ## Run locally
 
