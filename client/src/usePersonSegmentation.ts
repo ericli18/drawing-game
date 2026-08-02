@@ -18,7 +18,6 @@ const INFERENCE_INTERVAL_MS = 125
 // Consecutive identical detections before the reported person count changes,
 // so a single dropped frame does not flap the count.
 const COUNT_CONFIRMATION_FRAMES = 2
-const HIGHLIGHT_MASK_THRESHOLD = 0.15
 const LOCK_MASK_THRESHOLD = 0.6
 // Require most of a small region directly beneath the crosshair to be person
 // pixels. This avoids locking when the reticle is merely near a pose.
@@ -28,9 +27,6 @@ const LOCK_ACQUIRE_FRAMES = 3
 // Full-body landmark visibility is diagnostic only. It naturally falls when a
 // close-up face pushes shoulders or hips outside the frame.
 const CORE_LANDMARK_INDICES = [0, 11, 12, 23, 24] as const
-// The highlight overlay is decorative; render it at a bounded resolution so
-// high-resolution camera masks stay cheap to draw.
-const HIGHLIGHT_MAX_DIMENSION = 320
 const STALE_VIDEO_MS = 1_000
 const DIAGNOSTICS_INTERVAL_MS = 2_000
 const WASM_URL =
@@ -44,64 +40,19 @@ type PersonTracking = {
   targetLocked: boolean
 }
 
-type HighlightRender = {
+type SegmentationMasks = {
   maskData: Float32Array[]
   width: number
   height: number
 }
 
-function clearHighlight(canvas: HTMLCanvasElement | null) {
-  const context = canvas?.getContext('2d')
-  if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height)
-}
-
-function renderHighlight(
-  canvas: HTMLCanvasElement,
-  masks: MPMask[],
-): HighlightRender {
+function readSegmentationMasks(masks: MPMask[]): SegmentationMasks {
   const firstMask = masks[0]
-  const maskData = masks.map((mask) => mask.getAsFloat32Array())
-  const { width, height } = firstMask
-  const render = { maskData, width, height }
-
-  const stride = Math.max(
-    1,
-    Math.ceil(Math.max(width, height) / HIGHLIGHT_MAX_DIMENSION),
-  )
-  const outWidth = Math.max(1, Math.floor(width / stride))
-  const outHeight = Math.max(1, Math.floor(height / stride))
-  if (canvas.width !== outWidth || canvas.height !== outHeight) {
-    canvas.width = outWidth
-    canvas.height = outHeight
+  return {
+    maskData: masks.map((mask) => mask.getAsFloat32Array()),
+    width: firstMask.width,
+    height: firstMask.height,
   }
-
-  const context = canvas.getContext('2d')
-  if (!context) return render
-
-  const imageData = context.createImageData(outWidth, outHeight)
-  const color = [68, 70, 76]
-
-  for (let y = 0; y < outHeight; y += 1) {
-    const sourceRow = y * stride * width
-    for (let x = 0; x < outWidth; x += 1) {
-      const sourcePixel = sourceRow + x * stride
-      let confidence = 0
-      for (const data of maskData) {
-        confidence = Math.max(confidence, data[sourcePixel] ?? 0)
-      }
-
-      if (confidence < HIGHLIGHT_MASK_THRESHOLD) continue
-
-      const offset = (y * outWidth + x) * 4
-      imageData.data[offset] = color[0]
-      imageData.data[offset + 1] = color[1]
-      imageData.data[offset + 2] = color[2]
-      imageData.data[offset + 3] = Math.round(confidence * 108)
-    }
-  }
-
-  context.putImageData(imageData, 0, 0)
-  return render
 }
 
 function fullBodyVisibility(pose: NormalizedLandmark[] | undefined) {
@@ -113,7 +64,7 @@ function fullBodyVisibility(pose: NormalizedLandmark[] | undefined) {
   return scores.reduce((sum, visibility) => sum + visibility, 0) / scores.length
 }
 
-function centerMaskStats({ maskData, width, height }: HighlightRender) {
+function centerMaskStats({ maskData, width, height }: SegmentationMasks) {
   if (maskData.length === 0 || width === 0 || height === 0) {
     return {
       averageConfidence: 0,
@@ -195,7 +146,6 @@ export function usePersonSegmentation(
   videoRef: RefObject<HTMLVideoElement | null>,
   enabled: boolean,
 ) {
-  const highlightCanvasRef = useRef<HTMLCanvasElement>(null)
   const countRef = useRef(0)
   const targetLockedRef = useRef(false)
   const [retryKey, setRetryKey] = useState(0)
@@ -210,7 +160,6 @@ export function usePersonSegmentation(
       countRef.current = 0
       targetLockedRef.current = false
       setTracking({ state: 'idle', count: 0, targetLocked: false })
-      clearHighlight(highlightCanvasRef.current)
       return
     }
 
@@ -243,7 +192,6 @@ export function usePersonSegmentation(
     let bodyVisibility = 0
     let lockEvidence = 'no pose'
     let hitEvidence = 'none'
-    const highlightCanvas = highlightCanvasRef.current
 
     const resetLock = () => {
       lockEngaged = false
@@ -322,22 +270,18 @@ export function usePersonSegmentation(
               ? candidateCount
               : countRef.current
 
-          let render: HighlightRender | null = null
-          if (highlightCanvas && detectedCount > 0 && masks.length > 0) {
-            render = renderHighlight(highlightCanvas, masks)
-          } else {
-            clearHighlight(highlightCanvas)
-          }
+          const segmentation =
+            masks.length > 0 ? readSegmentationMasks(masks) : null
 
           maskStats =
-            render === null
+            segmentation === null
               ? {
                   averageConfidence: 0,
                   centerConfidence: 0,
                   coverage: 0,
                   maxConfidence: 0,
                 }
-              : centerMaskStats(render)
+              : centerMaskStats(segmentation)
           centerCovered =
             maskStats.centerConfidence >= LOCK_MASK_THRESHOLD &&
             maskStats.coverage >= LOCK_REGION_MIN_COVERAGE
@@ -346,39 +290,6 @@ export function usePersonSegmentation(
             detectedCount === 1
               ? fullBodyVisibility(result.landmarks[0])
               : 0
-          if (diagnosticsEnabled && highlightCanvas) {
-            highlightCanvas.dataset.maskAverageConfidence =
-              maskStats.averageConfidence.toFixed(3)
-            highlightCanvas.dataset.maskCenterConfidence =
-              maskStats.centerConfidence.toFixed(3)
-            highlightCanvas.dataset.maskCoverage = maskStats.coverage.toFixed(3)
-            highlightCanvas.dataset.maskMaxConfidence =
-              maskStats.maxConfidence.toFixed(3)
-            highlightCanvas.dataset.fullBodyVisibility =
-              bodyVisibility.toFixed(3)
-            if (render) {
-              let peakConfidence = 0
-              let peakPixel = 0
-              for (let pixel = 0; pixel < render.width * render.height; pixel += 1) {
-                for (const data of render.maskData) {
-                  const pixelConfidence = data[pixel] ?? 0
-                  if (pixelConfidence <= peakConfidence) continue
-                  peakConfidence = pixelConfidence
-                  peakPixel = pixel
-                }
-              }
-              highlightCanvas.dataset.maskPeakConfidence =
-                peakConfidence.toFixed(3)
-              highlightCanvas.dataset.maskPeakX = (
-                (peakPixel % render.width) /
-                render.width
-              ).toFixed(3)
-              highlightCanvas.dataset.maskPeakY = (
-                Math.floor(peakPixel / render.width) /
-                render.height
-              ).toFixed(3)
-            }
-          }
           const usable = detectedCount === 1 && centerCovered
           lockEvidence =
             detectedCount !== 1
@@ -418,7 +329,6 @@ export function usePersonSegmentation(
         cancelled = true
         currentLandmarker.close()
         landmarker = null
-        clearHighlight(highlightCanvas)
         setTracking({ state: 'error', count: 0, targetLocked: false })
       }
     }
@@ -450,7 +360,6 @@ export function usePersonSegmentation(
         candidateCount = 0
         candidateFrames = 0
         resetLock()
-        clearHighlight(highlightCanvas)
         setTracking({ state: 'tracking', count: 0, targetLocked: false })
       }
       if (!video || videoFrameSource || video.currentTime === lastVideoTime) {
@@ -494,7 +403,6 @@ export function usePersonSegmentation(
         videoFrameSource.cancelVideoFrameCallback(videoFrameCallback)
       }
       landmarker?.close()
-      clearHighlight(highlightCanvas)
     }
   }, [enabled, retryKey, videoRef])
 
@@ -503,7 +411,6 @@ export function usePersonSegmentation(
   }, [])
 
   return {
-    highlightCanvasRef,
     personCount: tracking.count,
     targetLocked: tracking.targetLocked,
     personTrackingState: tracking.state,

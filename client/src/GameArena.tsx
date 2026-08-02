@@ -334,7 +334,6 @@ export function GameArena({
     cameraEnabled && cameraStarted,
   )
   const {
-    highlightCanvasRef,
     targetLocked,
     personTrackingState,
     retryPersonTracking,
@@ -618,11 +617,6 @@ export function GameArena({
         aria-label="Rear camera view"
       />
       <div className="camera-shade" aria-hidden="true" />
-      <canvas
-        ref={highlightCanvasRef}
-        className="person-highlight"
-        aria-hidden="true"
-      />
 
       <header className="match-hud">
         <div className="match-hud__player match-hud__player--local">

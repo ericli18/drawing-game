@@ -306,7 +306,6 @@ button[aria-disabled='true'] {
 
 .camera-feed,
 .camera-shade,
-.person-highlight,
 .aim-layer,
 .drawing-layer {
   position: absolute;
@@ -325,12 +324,6 @@ button[aria-disabled='true'] {
   z-index: -3;
   pointer-events: none;
   background: rgba(9, 10, 12, 0.42);
-}
-
-.person-highlight {
-  z-index: -2;
-  object-fit: cover;
-  pointer-events: none;
 }
 
 /* Match HUD */
