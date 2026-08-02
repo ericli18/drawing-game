@@ -18,12 +18,10 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke) {
   const canvas = context.canvas
   const pixelRatio = window.devicePixelRatio || 1
 
-  context.strokeStyle = '#d7ff3f'
-  context.lineWidth = 7 * pixelRatio
+  context.strokeStyle = '#fff'
+  context.lineWidth = 10 * pixelRatio
   context.lineCap = 'round'
   context.lineJoin = 'round'
-  context.shadowColor = 'rgba(215, 255, 63, 0.65)'
-  context.shadowBlur = 12 * pixelRatio
   context.beginPath()
 
   stroke.forEach((point, index) => {
@@ -56,7 +54,7 @@ function formatSpellName(name?: string) {
   return name.charAt(0).toUpperCase() + name.slice(1).replaceAll('_', ' ')
 }
 
-export function useSpellArena() {
+export function useSpellArena(actionsEnabled: boolean) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const strokesRef = useRef<Stroke[]>([])
   const activeStrokeRef = useRef<Stroke | null>(null)
@@ -88,7 +86,7 @@ export function useSpellArena() {
   }, [redrawCanvas])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (isCasting || event.button !== 0) return
+    if (!actionsEnabled || isCasting || event.button !== 0) return
 
     event.currentTarget.setPointerCapture(event.pointerId)
     const stroke = [
@@ -105,7 +103,7 @@ export function useSpellArena() {
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const stroke = activeStrokeRef.current
     const canvas = canvasRef.current
-    if (!stroke || !canvas) return
+    if (!actionsEnabled || !stroke || !canvas) return
 
     const events = event.nativeEvent.getCoalescedEvents?.() ?? [event.nativeEvent]
     const bounds = canvas.getBoundingClientRect()
@@ -125,6 +123,10 @@ export function useSpellArena() {
   const finishStroke = () => {
     activeStrokeRef.current = null
   }
+
+  useEffect(() => {
+    if (!actionsEnabled) finishStroke()
+  }, [actionsEnabled])
 
   const clearDrawing = useCallback(() => {
     strokesRef.current = []
@@ -205,7 +207,7 @@ export function useSpellArena() {
   }, [clearDrawing])
 
   const castSpell = () => {
-    if (!hasDrawing || isCasting) return
+    if (!actionsEnabled || !hasDrawing || isCasting) return
 
     const socket = socketRef.current
     const canvas = canvasRef.current
