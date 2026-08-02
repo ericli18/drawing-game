@@ -13,6 +13,7 @@ import {
 } from './GameHud'
 import { useCamera, type CameraState } from './useCamera'
 import { useDrawingCanvas } from './useDrawingCanvas'
+import { useGameAudio, type GameSound } from './useGameAudio'
 import {
   type Effect,
   type PlayerState,
@@ -76,6 +77,15 @@ const SPELL_EFFECT: Partial<Record<Spell, Effect>> = {
   circle: 'shield',
   star: 'blind',
   triangle: 'reflect',
+}
+
+const SPELL_SOUND: Record<Spell, GameSound> = {
+  plus: 'spell-plus',
+  minus: 'spell-minus',
+  circle: 'spell-circle',
+  star: 'spell-star',
+  triangle: 'spell-triangle',
+  loop: 'reload',
 }
 
 const EFFECT_LABELS: Record<Effect, string> = {
@@ -338,6 +348,7 @@ export function GameArena({
   } = usePersonSegmentation(videoRef, cameraState === 'ready')
   const [notice, setNotice] = useState<MatchNotice | null>(null)
   const [shotFeedback, setShotFeedback] = useState<ShotFeedback | null>(null)
+  const { unlockAudio, playSound } = useGameAudio()
   const noticeTimerRef = useRef(0)
   const feedbackTimerRef = useRef(0)
   const handledCastRef = useRef(0)
@@ -421,6 +432,8 @@ export function GameArena({
   )
 
   const handleFire = useCallback(() => {
+    unlockAudio()
+
     if (!canFire) {
       if ((localPlayer?.ammo ?? 0) === 0) {
         showNotice('Blaster empty', 'Draw the reload loop.', 'danger')
@@ -447,16 +460,18 @@ export function GameArena({
     now,
     playerReady,
     showNotice,
+    unlockAudio,
   ])
 
   const handleCast = useCallback(() => {
+    unlockAudio()
     const payload = prepareCast()
     if (!payload) return
     if (!game.cast(payload)) {
       resolveCast(false)
       showNotice('Arena offline', 'Your drawing is safe. Reconnecting…', 'danger')
     }
-  }, [game, prepareCast, resolveCast, showNotice])
+  }, [game, prepareCast, resolveCast, showNotice, unlockAudio])
 
   useEffect(() => {
     const result = game.castResult
@@ -496,6 +511,19 @@ export function GameArena({
     if (event.event === 'shot' && event.outcome) {
       const direction =
         event.sourcePlayerId === playerId ? 'outgoing' : 'incoming'
+
+      if (event.damagedPlayerId === playerId) {
+        playSound('hit')
+      } else if (direction === 'outgoing') {
+        playSound('shot')
+      } else if (event.outcome === 'blocked') {
+        playSound('blocked')
+      } else if (event.outcome === 'reflected') {
+        playSound('reflected')
+      } else {
+        playSound('miss')
+      }
+
       setShotFeedback({ id: event.sequence, direction, outcome: event.outcome })
       window.clearTimeout(feedbackTimerRef.current)
       feedbackTimerRef.current = window.setTimeout(
@@ -514,20 +542,22 @@ export function GameArena({
       } else if (direction === 'incoming' && event.outcome === 'reflected') {
         showNotice('Reflection landed', 'The shot returned to your rival.', 'success')
       }
-    } else if (
-      event.event === 'spell_cast' &&
-      event.sourcePlayerId !== playerId &&
-      event.spell
-    ) {
-      showNotice(
-        `Incoming ${event.spell}`,
-        event.spell === 'star' ? 'Your vision is compromised.' : 'Rival cast a glyph.',
-        'danger',
-      )
+    } else if (event.event === 'spell_cast' && event.spell) {
+      playSound(SPELL_SOUND[event.spell])
+
+      if (event.sourcePlayerId !== playerId) {
+        showNotice(
+          `Incoming ${event.spell}`,
+          event.spell === 'star'
+            ? 'Your vision is compromised.'
+            : 'Rival cast a glyph.',
+          'danger',
+        )
+      }
     } else if (event.event === 'rematch_requested') {
       showNotice('Rematch requested', 'Both players must lock it in.')
     }
-  }, [game.gameEvent, playerId, showNotice])
+  }, [game.gameEvent, playerId, playSound, showNotice])
 
   useEffect(() => {
     const rejection = game.actionRejection
@@ -592,6 +622,7 @@ export function GameArena({
   }
 
   const enableCamera = () => {
+    unlockAudio()
     if (!cameraStarted) setCameraStarted(true)
     else void startCamera()
   }
