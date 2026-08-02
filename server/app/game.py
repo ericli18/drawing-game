@@ -5,11 +5,11 @@ from typing import Literal, cast
 
 
 MAX_HEALTH = 100
-MAX_AMMO = 6
+MAX_AMMO = 12
 SHOT_DAMAGE = 12
-BASE_SHOT_INTERVAL_MS = 800
-RAPID_SHOT_INTERVAL_MS = 400
-SLOW_SHOT_INTERVAL_MS = 1600
+BASE_SHOT_INTERVAL_MS = 400
+RAPID_SHOT_INTERVAL_MS = 200
+SLOW_SHOT_INTERVAL_MS = 1000
 
 SpellName = Literal["plus", "minus", "circle", "star", "triangle", "loop"]
 EffectName = Literal["rapid", "slow", "shield", "blind", "reflect"]
