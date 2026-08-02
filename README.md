@@ -59,6 +59,20 @@ For a separately hosted backend, `VITE_WS_URL` can be either a WebSocket origin
 such as `wss://game.example.com` or a full template containing `{roomId}` and
 `{playerId}`. Browsers require HTTPS for camera access away from localhost.
 
+## Deploy on Railway
+
+The repository includes a production Docker image that builds the client and
+serves it from FastAPI, keeping the app and `/ws` endpoint on one origin.
+
+1. Create a Railway service from this GitHub repository.
+2. Generate a public domain and select a region near the players.
+3. Keep the service at one replica because rooms are stored in memory.
+4. Leave Serverless/App Sleep disabled so live rooms are not discarded.
+
+Railway reads `railway.json`, builds the root `Dockerfile`, checks `/health`,
+and supplies the `PORT` used by the container. No deployment variables are
+required.
+
 ## Verify
 
 ```sh

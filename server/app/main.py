@@ -1,10 +1,12 @@
 import asyncio
 import secrets
 from dataclasses import dataclass, field
+from pathlib import Path
 from time import time
 from uuid import uuid4
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from app.game import (
@@ -802,3 +804,8 @@ async def _handle_rematch(
         room.revision += 1
         await rooms.broadcast_event_locked(room, result.event or {})
         await rooms.broadcast_state_locked(room, now_ms)
+
+
+client_dist = Path(__file__).resolve().parents[2] / "client" / "dist"
+if client_dist.is_dir():
+    app.mount("/", StaticFiles(directory=client_dist, html=True), name="client")
