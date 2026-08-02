@@ -28,3 +28,7 @@ thanks to Kenney.
 | Star | Digital Audio `zapThreeToneUp.ogg` |
 | Triangle | Digital Audio `zapTwoTone2.ogg` |
 | Reload loop | RPG Audio `metalLatch.ogg` |
+
+`victory.mp3` and `defeat.mp3` were synthesized locally with the macOS Daniel
+text-to-speech voice, then pitch-layered, compressed, echoed, and normalized for
+the arena-announcer effect. They do not include audio from the Kenney packs.

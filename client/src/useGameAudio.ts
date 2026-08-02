@@ -12,6 +12,8 @@ export type GameSound =
   | 'spell-star'
   | 'spell-triangle'
   | 'reload'
+  | 'victory'
+  | 'defeat'
 
 const SOUND_URLS: Record<GameSound, string> = {
   shot: '/sounds/shot.mp3',
@@ -25,6 +27,8 @@ const SOUND_URLS: Record<GameSound, string> = {
   'spell-star': '/sounds/spell-star.mp3',
   'spell-triangle': '/sounds/spell-triangle.mp3',
   reload: '/sounds/reload.mp3',
+  victory: '/sounds/victory.mp3',
+  defeat: '/sounds/defeat.mp3',
 }
 
 const SOUND_NAMES = Object.keys(SOUND_URLS) as GameSound[]

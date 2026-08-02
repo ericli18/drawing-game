@@ -40,6 +40,7 @@ import { SPELL_LABELS } from './spellLabels'
 const TIMING = {
   shotFeedback: 420,
   notice: 2_300,
+  resultAnnouncement: 520,
 }
 
 const MAX_AMMO = 6
@@ -351,10 +352,12 @@ export function GameArena({
   const { unlockAudio, playSound } = useGameAudio()
   const noticeTimerRef = useRef(0)
   const feedbackTimerRef = useRef(0)
+  const resultAudioTimerRef = useRef(0)
   const handledCastRef = useRef(0)
   const handledEventRef = useRef(0)
   const handledRejectionRef = useRef(0)
   const handledSocketErrorRef = useRef(0)
+  const announcedWinnerRef = useRef<string | null>(null)
   const now = useTicker(Boolean(game.gameState)) + game.serverClockOffset
   const state = game.gameState
   const localPlayer = state?.players.find(
@@ -427,6 +430,7 @@ export function GameArena({
     () => () => {
       window.clearTimeout(noticeTimerRef.current)
       window.clearTimeout(feedbackTimerRef.current)
+      window.clearTimeout(resultAudioTimerRef.current)
     },
     [],
   )
@@ -558,6 +562,22 @@ export function GameArena({
       showNotice('Rematch requested', 'Both players must lock it in.')
     }
   }, [game.gameEvent, playerId, playSound, showNotice])
+
+  useEffect(() => {
+    if (state?.phase !== 'finished' || !state.winnerId) {
+      window.clearTimeout(resultAudioTimerRef.current)
+      announcedWinnerRef.current = null
+      return
+    }
+    if (announcedWinnerRef.current === state.winnerId) return
+
+    announcedWinnerRef.current = state.winnerId
+    const resultSound = state.winnerId === playerId ? 'victory' : 'defeat'
+    resultAudioTimerRef.current = window.setTimeout(
+      () => playSound(resultSound),
+      TIMING.resultAnnouncement,
+    )
+  }, [playSound, playerId, state?.phase, state?.winnerId])
 
   useEffect(() => {
     const rejection = game.actionRejection
