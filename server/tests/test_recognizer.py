@@ -26,7 +26,14 @@ def star_points() -> list[tuple[float, float]]:
     return [vertices[index] for index in (0, 2, 4, 1, 3, 0)]
 
 
-def loop_points() -> list[tuple[float, float]]:
+def up_arrow_strokes() -> list[list[tuple[float, float]]]:
+    return [
+        [(0.50, 0.84), (0.50, 0.16)],
+        [(0.20, 0.44), (0.50, 0.16), (0.80, 0.44)],
+    ]
+
+
+def old_reload_loop_points() -> list[tuple[float, float]]:
     loop = [
         (
             0.44 + 0.28 * cos(pi / 4 + 2 * pi * index / 24),
@@ -54,7 +61,7 @@ def loop_points() -> list[tuple[float, float]]:
             "triangle",
             [[(0.50, 0.15), (0.84, 0.80), (0.16, 0.80), (0.50, 0.15)]],
         ),
-        ("loop", [loop_points()]),
+        ("loop", up_arrow_strokes()),
     ],
 )
 def test_recognizes_supported_drawings(
@@ -93,14 +100,10 @@ def test_corrects_portrait_canvas_aspect_ratio(drawing_type: str) -> None:
     elif drawing_type == "triangle":
         pixel_strokes = [[(195, 220), (325, 500), (65, 500), (195, 220)]]
     else:
-        loop = [
-            (
-                170 + 110 * cos(pi / 4 + 2 * pi * index / 32),
-                340 + 110 * sin(pi / 4 + 2 * pi * index / 32),
-            )
-            for index in range(33)
+        pixel_strokes = [
+            [(195, 510), (195, 210)],
+            [(65, 340), (195, 210), (325, 340)],
         ]
-        pixel_strokes = [[*loop, (320, 455), (355, 505)]]
 
     normalized_strokes = [
         [(x / width, y / height) for x, y in stroke]
@@ -113,6 +116,12 @@ def test_corrects_portrait_canvas_aspect_ratio(drawing_type: str) -> None:
 
     assert result.accepted is True
     assert result.drawing_type == drawing_type
+
+
+def test_old_reload_loop_does_not_reload() -> None:
+    result = recognizer.recognize([old_reload_loop_points()])
+
+    assert result.drawing_type != "loop"
 
 
 @pytest.mark.parametrize(
