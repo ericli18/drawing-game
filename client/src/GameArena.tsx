@@ -270,7 +270,7 @@ function WaitingRoom({
     >
       {opponentPresent ? null : <h1 id="waiting-title">Invite your rival</h1>}
       <p className="waiting-room__copy">
-        Open Spellshot on their phone and enter this room code.
+        Open Shotta Flow on their phone and enter this room code.
       </p>
       <button
         className="room-code"

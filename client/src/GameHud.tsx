@@ -1,5 +1,5 @@
 import { SpellGlyph, type SpellKind } from './SpellGlyph'
-import { SPELL_LABELS } from './spellLabels'
+import { SPELL_DESCRIPTIONS, SPELL_LABELS } from './spellLabels'
 
 const SPELL_ORDER: readonly SpellKind[] = [
   'plus',
@@ -149,7 +149,7 @@ export function SpellRail({
           const spellLabel = SPELL_LABELS[spell]
           const phaseLabel =
             state.phase === 'ready'
-              ? 'Ready'
+              ? SPELL_DESCRIPTIONS[spell]
               : `${state.phase === 'active' ? 'Active' : 'Cooldown'} · ${formatSeconds(
                   state.remainingSeconds,
                 )}`

@@ -6,8 +6,8 @@ import { useGameSocket } from './useGameSocket'
 
 const ROOM_CODE_LENGTH = 5
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-const PLAYER_ID_KEY = 'spellshot-player-id'
-const PLAYER_TOKEN_KEY = 'spellshot-player-token'
+const PLAYER_ID_KEY = 'shotta-flow-player-id'
+const PLAYER_TOKEN_KEY = 'shotta-flow-player-token'
 
 type RoomEntry = {
   code: string

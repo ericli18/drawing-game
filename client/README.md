@@ -1,6 +1,6 @@
-# SPELLSHOT client
+# Shotta Flow client
 
-React 19 + TypeScript + Vite client for the SPELLSHOT AR duel. See the
+React 19 + TypeScript + Vite client for the Shotta Flow AR duel. See the
 repository root README for gameplay, local setup, protocol, and architecture.
 
 ```sh

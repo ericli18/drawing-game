@@ -1,6 +1,6 @@
-# SPELLSHOT
+# Shotta Flow
 
-SPELLSHOT is a two-player AR laser-tag game where hand-drawn glyphs change the
+Shotta Flow is a two-player AR laser-tag game where hand-drawn glyphs change the
 duel. Both players join the same private room, point their rear cameras at each
 other, and fire. Shots only damage the rival while the on-device person scan
 has exactly one high-confidence target directly beneath the crosshair. Firing

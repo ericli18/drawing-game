@@ -44,7 +44,7 @@ export function LobbyScreen({
     >
       <header className="lobby-screen__header">
         <h1 className="lobby-screen__title" id="lobby-title">
-          Spellshot
+          Shotta Flow
         </h1>
       </header>
 
