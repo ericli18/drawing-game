@@ -317,6 +317,24 @@ def _star(
     return [vertices[index] for index in order]
 
 
+def _triangle(
+    top: tuple[float, float],
+    bottom_right: tuple[float, float],
+    bottom_left: tuple[float, float],
+) -> list[tuple[float, float]]:
+    return [top, bottom_right, bottom_left, top]
+
+
+def _lasso(
+    center: tuple[float, float],
+    radii: tuple[float, float],
+    phase: float,
+    tail_end: tuple[float, float],
+) -> list[tuple[float, float]]:
+    loop = _circle(center, radii, phase)
+    return [*loop, *_line(loop[-1], tail_end, count=4)[1:]]
+
+
 def _templates() -> Iterable[PointCloud]:
     pluses = (
         (((0.50, 0.18), (0.50, 0.82)), ((0.18, 0.50), (0.82, 0.50))),
@@ -327,6 +345,16 @@ def _templates() -> Iterable[PointCloud]:
     )
     for vertical, horizontal in pluses:
         yield PointCloud("plus", (_line(*vertical), _line(*horizontal)))
+
+    minuses = (
+        ((0.16, 0.50), (0.84, 0.50)),
+        ((0.15, 0.48), (0.85, 0.52)),
+        ((0.18, 0.52), (0.82, 0.48)),
+        ((0.14, 0.51), (0.86, 0.49)),
+        ((0.20, 0.49), (0.80, 0.51)),
+    )
+    for start, end in minuses:
+        yield PointCloud("minus", (_line(start, end),))
 
     circles = (
         ((0.50, 0.50), (0.32, 0.32), 0.00),
@@ -347,6 +375,26 @@ def _templates() -> Iterable[PointCloud]:
     )
     for center, radius, rotation in stars:
         yield PointCloud("star", (_star(center, radius, rotation),))
+
+    triangles = (
+        ((0.50, 0.15), (0.84, 0.80), (0.16, 0.80)),
+        ((0.49, 0.16), (0.83, 0.82), (0.17, 0.79)),
+        ((0.52, 0.14), (0.86, 0.79), (0.18, 0.82)),
+        ((0.48, 0.18), (0.81, 0.83), (0.14, 0.78)),
+        ((0.51, 0.17), (0.85, 0.81), (0.19, 0.80)),
+    )
+    for top, bottom_right, bottom_left in triangles:
+        yield PointCloud("triangle", (_triangle(top, bottom_right, bottom_left),))
+
+    lassos = (
+        ((0.44, 0.39), (0.28, 0.28), pi / 4, (0.86, 0.78)),
+        ((0.43, 0.40), (0.27, 0.29), pi / 4 + 0.06, (0.84, 0.80)),
+        ((0.45, 0.38), (0.29, 0.27), pi / 4 - 0.05, (0.88, 0.76)),
+        ((0.42, 0.41), (0.27, 0.27), pi / 4 + 0.10, (0.83, 0.82)),
+        ((0.46, 0.40), (0.28, 0.29), pi / 4 - 0.09, (0.87, 0.81)),
+    )
+    for center, radii, phase, tail_end in lassos:
+        yield PointCloud("loop", (_lasso(center, radii, phase, tail_end),))
 
 
 recognizer = QDollarRecognizer(tuple(_templates()))

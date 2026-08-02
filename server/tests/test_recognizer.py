@@ -26,6 +26,17 @@ def star_points() -> list[tuple[float, float]]:
     return [vertices[index] for index in (0, 2, 4, 1, 3, 0)]
 
 
+def loop_points() -> list[tuple[float, float]]:
+    loop = [
+        (
+            0.44 + 0.28 * cos(pi / 4 + 2 * pi * index / 24),
+            0.39 + 0.28 * sin(pi / 4 + 2 * pi * index / 24),
+        )
+        for index in range(25)
+    ]
+    return [*loop, (0.78, 0.68), (0.86, 0.78)]
+
+
 @pytest.mark.parametrize(
     ("drawing_type", "strokes"),
     [
@@ -36,8 +47,14 @@ def star_points() -> list[tuple[float, float]]:
                 [(0.82, 0.49), (0.17, 0.52)],
             ],
         ),
+        ("minus", [[(0.16, 0.51), (0.84, 0.49)]]),
         ("circle", [circle_points()]),
         ("star", [star_points()]),
+        (
+            "triangle",
+            [[(0.50, 0.15), (0.84, 0.80), (0.16, 0.80), (0.50, 0.15)]],
+        ),
+        ("loop", [loop_points()]),
     ],
 )
 def test_recognizes_supported_drawings(
@@ -50,7 +67,7 @@ def test_recognizes_supported_drawings(
     assert result.score > 0.9
 
 
-@pytest.mark.parametrize("drawing_type", ["circle", "star"])
+@pytest.mark.parametrize("drawing_type", ["circle", "star", "triangle", "loop"])
 def test_corrects_portrait_canvas_aspect_ratio(drawing_type: str) -> None:
     width = 390
     height = 844
@@ -64,7 +81,7 @@ def test_corrects_portrait_canvas_aspect_ratio(drawing_type: str) -> None:
                 for index in range(33)
             ]
         ]
-    else:
+    elif drawing_type == "star":
         vertices = [
             (
                 195 + 130 * cos(-pi / 2 + 2 * pi * index / 5),
@@ -73,6 +90,17 @@ def test_corrects_portrait_canvas_aspect_ratio(drawing_type: str) -> None:
             for index in range(5)
         ]
         pixel_strokes = [[vertices[index] for index in (0, 2, 4, 1, 3, 0)]]
+    elif drawing_type == "triangle":
+        pixel_strokes = [[(195, 220), (325, 500), (65, 500), (195, 220)]]
+    else:
+        loop = [
+            (
+                170 + 110 * cos(pi / 4 + 2 * pi * index / 32),
+                340 + 110 * sin(pi / 4 + 2 * pi * index / 32),
+            )
+            for index in range(33)
+        ]
+        pixel_strokes = [[*loop, (320, 455), (355, 505)]]
 
     normalized_strokes = [
         [(x / width, y / height) for x, y in stroke]
@@ -94,7 +122,7 @@ def test_corrects_portrait_canvas_aspect_ratio(drawing_type: str) -> None:
         [[(0.1, 0.1), (0.8, 0.2), (0.2, 0.4), (0.9, 0.6), (0.1, 0.9)]],
         [[(0.5, 0.5)]],
         [[(0.2, 0.2), (0.8, 0.2), (0.8, 0.8), (0.2, 0.8), (0.2, 0.2)]],
-        [[(0.5, 0.15), (0.85, 0.8), (0.15, 0.8), (0.5, 0.15)]],
+        [[(0.2, 0.2), (0.2, 0.8), (0.5, 0.9), (0.8, 0.8), (0.8, 0.2)]],
         [
             [
                 (0.8, 0.5),

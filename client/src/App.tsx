@@ -1,122 +1,132 @@
+import { useEffect, useState } from 'react'
 import './App.css'
-import { useCamera } from './useCamera'
-import {
-  usePersonSegmentation,
-  type PersonTrackingState,
-} from './usePersonSegmentation'
-import { useSpellArena } from './useSpellArena'
+import { GameArena } from './GameArena'
+import { LobbyScreen } from './LobbyScreen'
+import { useGameSocket } from './useGameSocket'
 
-function getDrawingHint(state: PersonTrackingState, count: number) {
-  if (state === 'loading') return 'Finding player…'
-  if (state === 'error') return 'Player scan unavailable'
-  if (count > 1) return 'Only one player can be in frame'
-  if (count === 0) return 'Step into frame'
-  return 'Draw anywhere'
+const ROOM_CODE_LENGTH = 5
+const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const PLAYER_ID_KEY = 'spellshot-player-id'
+const PLAYER_TOKEN_KEY = 'spellshot-player-token'
+
+type RoomEntry = {
+  code: string
+  create: boolean
+}
+
+function randomToken(length: number, alphabet = ROOM_ALPHABET) {
+  const values = crypto.getRandomValues(new Uint8Array(length))
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join(
+    '',
+  )
+}
+
+function getPlayerId() {
+  const existing = window.sessionStorage.getItem(PLAYER_ID_KEY)
+  if (existing) return existing
+  const playerId = `player-${randomToken(10).toLowerCase()}`
+  window.sessionStorage.setItem(PLAYER_ID_KEY, playerId)
+  return playerId
+}
+
+function getPlayerToken() {
+  const existing = window.sessionStorage.getItem(PLAYER_TOKEN_KEY)
+  if (existing) return existing
+  const token = randomToken(24)
+  window.sessionStorage.setItem(PLAYER_TOKEN_KEY, token)
+  return token
+}
+
+function roomFromUrl(): RoomEntry | null {
+  const room = new URLSearchParams(window.location.search)
+    .get('room')
+    ?.toUpperCase()
+  return room?.length === ROOM_CODE_LENGTH
+    ? { code: room, create: false }
+    : null
+}
+
+function setRoomInUrl(roomCode: string | null) {
+  const url = new URL(window.location.href)
+  if (roomCode) url.searchParams.set('room', roomCode)
+  else url.searchParams.delete('room')
+  window.history.replaceState({}, '', url)
 }
 
 function App() {
-  const { videoRef, cameraState, startCamera } = useCamera()
-  const { highlightCanvasRef, personCount, personTrackingState } =
-    usePersonSegmentation(videoRef, cameraState === 'ready')
-  const playerReady =
-    cameraState === 'ready' &&
-    personTrackingState === 'tracking' &&
-    personCount === 1
-  const {
-    canvasRef,
-    hasDrawing,
-    isCasting,
-    notice,
-    serverState,
-    handlePointerDown,
-    handlePointerMove,
-    finishStroke,
-    clearDrawing,
-    castSpell,
-  } = useSpellArena(playerReady)
+  const [playerId] = useState(getPlayerId)
+  const [playerToken] = useState(getPlayerToken)
+  const [roomEntry, setRoomEntry] = useState<RoomEntry | null>(roomFromUrl)
+  const [lobbyError, setLobbyError] = useState<string | null>(null)
+  const roomCode = roomEntry?.code ?? null
+  const game = useGameSocket(
+    roomCode,
+    playerId,
+    playerToken,
+    roomEntry?.create,
+  )
+
+  useEffect(() => {
+    const errors = {
+      full: 'That room already has two players. Try another code.',
+      missing: 'No duel uses that code. Check it and try again.',
+      exists: 'That room code was just claimed. Create another duel.',
+      unauthorized: 'This player slot belongs to another session.',
+      replaced: 'This player is already active in another tab.',
+    } as const
+    if (!(game.connectionState in errors)) return
+    setLobbyError(errors[game.connectionState as keyof typeof errors])
+    setRoomEntry(null)
+    setRoomInUrl(null)
+  }, [game.connectionState])
+
+  const enterRoom = (code: string, create = false) => {
+    setLobbyError(null)
+    setRoomEntry({ code, create })
+    setRoomInUrl(code)
+  }
+
+  const createRoom = () => enterRoom(randomToken(ROOM_CODE_LENGTH), true)
+
+  const leaveRoom = () => {
+    game.leave()
+    setRoomEntry(null)
+    setRoomInUrl(null)
+  }
+
+  if (!roomCode) {
+    return (
+      <main className="app-shell">
+        <div className="lobby-backdrop" aria-hidden="true">
+          <span className="lobby-backdrop__plus">+</span>
+          <span className="lobby-backdrop__circle" />
+          <span className="lobby-backdrop__triangle" />
+          <span className="lobby-backdrop__line" />
+        </div>
+        <LobbyScreen
+          onCreate={createRoom}
+          onJoin={enterRoom}
+          connecting={false}
+          error={lobbyError}
+        />
+        <footer className="lobby-footer">
+          <span>6 shots</span>
+          <span aria-hidden="true">•</span>
+          <span>6 glyphs</span>
+          <span aria-hidden="true">•</span>
+          <span>1 rival</span>
+        </footer>
+      </main>
+    )
+  }
 
   return (
-    <main className="spell-arena">
-      <video
-        ref={videoRef}
-        className="camera-feed"
-        autoPlay
-        muted
-        playsInline
-        aria-label="Your camera preview"
-      />
-      <div className="camera-shade" aria-hidden="true" />
-      <canvas
-        ref={highlightCanvasRef}
-        className="person-highlight"
-        aria-hidden="true"
-      />
-
-      {cameraState !== 'ready' ? (
-        <section className="camera-message" aria-live="polite">
-          <h1>
-            {cameraState === 'requesting'
-              ? 'Summoning your camera…'
-              : 'Camera access is off'}
-          </h1>
-          <p>
-            {cameraState === 'requesting'
-              ? 'Allow camera access to begin.'
-              : 'Allow camera access in your browser, then try again.'}
-          </p>
-          {cameraState === 'blocked' ? (
-            <button className="retry-button" type="button" onClick={startCamera}>
-              Try again
-            </button>
-          ) : null}
-        </section>
-      ) : null}
-
-      <canvas
-        ref={canvasRef}
-        className={`drawing-layer${isCasting ? ' drawing-layer--casting' : ''}`}
-        aria-label="Spell drawing canvas"
-        aria-disabled={!playerReady}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={finishStroke}
-        onPointerCancel={finishStroke}
-      />
-
-      <p
-        className="arena-hint"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        aria-label={notice ? `${notice.title}. ${notice.detail}` : undefined}
-      >
-        {notice?.title ?? getDrawingHint(personTrackingState, personCount)}
-      </p>
-
-      <div className="controls" aria-label="Drawing controls">
-        <button
-          className="control-button control-button--clear"
-          type="button"
-          onClick={clearDrawing}
-          disabled={!playerReady || !hasDrawing || isCasting}
-        >
-          Clear
-        </button>
-        <button
-          className="control-button control-button--cast"
-          type="button"
-          onClick={castSpell}
-          disabled={
-            !playerReady ||
-            !hasDrawing ||
-            isCasting ||
-            serverState !== 'connected'
-          }
-        >
-          {isCasting ? 'Casting…' : 'Cast spell'}
-        </button>
-      </div>
-    </main>
+    <GameArena
+      roomCode={roomCode}
+      playerId={playerId}
+      game={game}
+      onLeave={leaveRoom}
+    />
   )
 }
 
