@@ -109,13 +109,6 @@ function App() {
           connecting={false}
           error={lobbyError}
         />
-        <footer className="lobby-footer">
-          <span>6 shots</span>
-          <span aria-hidden="true">•</span>
-          <span>6 glyphs</span>
-          <span aria-hidden="true">•</span>
-          <span>1 rival</span>
-        </footer>
       </main>
     )
   }

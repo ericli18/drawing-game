@@ -265,12 +265,10 @@ function WaitingRoom({
   return (
     <section
       className="waiting-room"
-      aria-labelledby="waiting-title"
+      aria-label={opponentPresent ? 'Duel setup' : undefined}
+      aria-labelledby={opponentPresent ? undefined : 'waiting-title'}
     >
-      <p className="waiting-room__eyebrow">Private duel</p>
-      <h1 id="waiting-title">
-        {opponentPresent ? 'Prepare to duel' : 'Invite your rival'}
-      </h1>
+      {opponentPresent ? null : <h1 id="waiting-title">Invite your rival</h1>}
       <p className="waiting-room__copy">
         Open Spellshot on their phone and enter this room code.
       </p>
@@ -628,7 +626,6 @@ export function GameArena({
           <StatusChips player={localPlayer} now={now} align="left" />
         </div>
         <div className="match-mark" aria-label={`Room ${roomCode}`}>
-          <span className="match-mark__logo">S/S</span>
           <span
             className={`connection-dot connection-dot--${game.connectionState}`}
             title={game.connectionState}

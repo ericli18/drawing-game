@@ -1,10 +1,14 @@
 :root {
+  --player-blue: #1c67b4;
+  --rival-red: #da0c25;
+  --neutral-950: #181a1f;
+  --paper: #f7f4ed;
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
   --font-display: "Avenir Next Condensed", "Arial Narrow", var(--font-ui);
   font-family: var(--font-ui);
-  color: #fff;
-  background: #090a0c;
+  color: var(--neutral-950);
+  background: var(--paper);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -27,5 +31,5 @@ body,
 body {
   min-height: 100svh;
   overscroll-behavior: none;
-  background: #090a0c;
+  background: var(--paper);
 }

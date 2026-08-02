@@ -43,13 +43,9 @@ export function LobbyScreen({
       aria-labelledby="lobby-title"
     >
       <header className="lobby-screen__header">
-        <p className="lobby-screen__eyebrow">Draw. Cast. Tag.</p>
         <h1 className="lobby-screen__title" id="lobby-title">
           Spellshot
         </h1>
-        <p className="lobby-screen__premise">
-          AR laser tag where every shape becomes a spell.
-        </p>
       </header>
 
       <div className="lobby-screen__actions">

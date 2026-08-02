@@ -21,8 +21,8 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke) {
   const canvas = context.canvas
   const pixelRatio = window.devicePixelRatio || 1
 
-  context.strokeStyle = '#ffffff'
-  context.shadowColor = 'rgba(215, 255, 63, 0.62)'
+  context.strokeStyle = '#1c67b4'
+  context.shadowColor = 'rgba(28, 103, 180, 0.62)'
   context.shadowBlur = 8 * pixelRatio
   context.lineWidth = BRUSH_WIDTH * pixelRatio
   context.lineCap = 'round'
