@@ -18,25 +18,21 @@ const INFERENCE_INTERVAL_MS = 125
 // Consecutive identical detections before the reported person count changes,
 // so a single dropped frame does not flap the count.
 const COUNT_CONFIRMATION_FRAMES = 2
-const MASK_THRESHOLD = 0.15
-// The lock samples this fraction of the frame around the crosshair rather
-// than a single pixel, because the lite model's masks are patchy.
-const LOCK_REGION_EXTENT = 0.08
-const LANDMARK_LOCK_MARGIN = 0.05
-// The lock is a hysteresis machine: it needs consecutive confident frames to
-// engage, then rides through detection flicker for a grace period at a lower
-// confidence bar before releasing.
-const LOCK_ACQUIRE_FRAMES = 2
-const LOCK_GRACE_MS = 300
-const LOCK_ACQUIRE_CONFIDENCE = 0.6
-const LOCK_RELEASE_CONFIDENCE = 0.45
-// Nose, shoulders, and hips: their mean visibility is a stable measure of how
-// certain the model is that a real person is in frame.
+const HIGHLIGHT_MASK_THRESHOLD = 0.15
+const LOCK_MASK_THRESHOLD = 0.6
+// Require most of a small region directly beneath the crosshair to be person
+// pixels. This avoids locking when the reticle is merely near a pose.
+const LOCK_REGION_EXTENT = 0.025
+const LOCK_REGION_MIN_COVERAGE = 0.5
+const LOCK_ACQUIRE_FRAMES = 3
+// Full-body landmark visibility is diagnostic only. It naturally falls when a
+// close-up face pushes shoulders or hips outside the frame.
 const CORE_LANDMARK_INDICES = [0, 11, 12, 23, 24] as const
 // The highlight overlay is decorative; render it at a bounded resolution so
 // high-resolution camera masks stay cheap to draw.
 const HIGHLIGHT_MAX_DIMENSION = 320
 const STALE_VIDEO_MS = 1_000
+const DIAGNOSTICS_INTERVAL_MS = 2_000
 const WASM_URL =
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm'
 const MODEL_URL =
@@ -94,7 +90,7 @@ function renderHighlight(
         confidence = Math.max(confidence, data[sourcePixel] ?? 0)
       }
 
-      if (confidence < MASK_THRESHOLD) continue
+      if (confidence < HIGHLIGHT_MASK_THRESHOLD) continue
 
       const offset = (y * outWidth + x) * 4
       imageData.data[offset] = color[0]
@@ -108,7 +104,7 @@ function renderHighlight(
   return render
 }
 
-function coreConfidence(pose: NormalizedLandmark[] | undefined) {
+function fullBodyVisibility(pose: NormalizedLandmark[] | undefined) {
   if (!pose) return 0
   const scores = CORE_LANDMARK_INDICES.map(
     (index) => pose[index]?.visibility,
@@ -117,67 +113,77 @@ function coreConfidence(pose: NormalizedLandmark[] | undefined) {
   return scores.reduce((sum, visibility) => sum + visibility, 0) / scores.length
 }
 
-function maskCoversCenter({ maskData, width, height }: HighlightRender) {
-  if (maskData.length === 0 || width === 0 || height === 0) return false
+function centerMaskStats({ maskData, width, height }: HighlightRender) {
+  if (maskData.length === 0 || width === 0 || height === 0) {
+    return {
+      averageConfidence: 0,
+      centerConfidence: 0,
+      coverage: 0,
+      maxConfidence: 0,
+    }
+  }
 
   const radiusX = Math.max(1, Math.round(width * LOCK_REGION_EXTENT))
   const radiusY = Math.max(1, Math.round(height * LOCK_REGION_EXTENT))
   const centerX = Math.floor(width / 2)
   const centerY = Math.floor(height / 2)
+  let coveredPixels = 0
+  let confidenceSum = 0
+  let maxConfidence = 0
+  let sampledPixels = 0
+  let centerConfidence = 0
 
   for (let y = centerY - radiusY; y <= centerY + radiusY; y += 1) {
     const rowOffset = y * width
     for (let x = centerX - radiusX; x <= centerX + radiusX; x += 1) {
+      sampledPixels += 1
+      let pixelConfidence = 0
       for (const data of maskData) {
-        if ((data[rowOffset + x] ?? 0) >= MASK_THRESHOLD) return true
+        pixelConfidence = Math.max(
+          pixelConfidence,
+          data[rowOffset + x] ?? 0,
+        )
       }
+      confidenceSum += pixelConfidence
+      maxConfidence = Math.max(maxConfidence, pixelConfidence)
+      if (x === centerX && y === centerY) centerConfidence = pixelConfidence
+      if (pixelConfidence >= LOCK_MASK_THRESHOLD) coveredPixels += 1
     }
   }
-  return false
-}
-
-function poseCoversCenter(poses: NormalizedLandmark[][]) {
-  return poses.some((pose) => {
-    let minX = Infinity
-    let maxX = -Infinity
-    let minY = Infinity
-    let maxY = -Infinity
-    for (const point of pose) {
-      minX = Math.min(minX, point.x)
-      maxX = Math.max(maxX, point.x)
-      minY = Math.min(minY, point.y)
-      maxY = Math.max(maxY, point.y)
-    }
-    return (
-      0.5 >= minX - LANDMARK_LOCK_MARGIN &&
-      0.5 <= maxX + LANDMARK_LOCK_MARGIN &&
-      0.5 >= minY - LANDMARK_LOCK_MARGIN &&
-      0.5 <= maxY + LANDMARK_LOCK_MARGIN
-    )
-  })
+  return {
+    averageConfidence: confidenceSum / sampledPixels,
+    centerConfidence,
+    coverage: coveredPixels / sampledPixels,
+    maxConfidence,
+  }
 }
 
 async function createPoseLandmarker() {
   const { FilesetResolver, PoseLandmarker } = await import(
     '@mediapipe/tasks-vision'
   )
-  const vision = await FilesetResolver.forVisionTasks(WASM_URL)
+  const vision = await FilesetResolver.forVisionTasks(WASM_URL, false)
   const options = {
     baseOptions: {
       modelAssetPath: MODEL_URL,
       delegate: 'GPU' as const,
     },
     runningMode: 'VIDEO' as const,
+    canvas: document.createElement('canvas'),
     numPoses: MAX_POSES,
-    minPoseDetectionConfidence: 0.4,
-    minPosePresenceConfidence: 0.4,
-    minTrackingConfidence: 0.3,
+    minPoseDetectionConfidence: 0.6,
+    minPosePresenceConfidence: 0.6,
+    minTrackingConfidence: 0.6,
     outputSegmentationMasks: true,
   }
 
   try {
     return await PoseLandmarker.createFromOptions(vision, options)
-  } catch {
+  } catch (error) {
+    console.warn(
+      '[targeting] GPU initialization failed; falling back to CPU.',
+      error,
+    )
     return PoseLandmarker.createFromOptions(vision, {
       ...options,
       baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
@@ -210,6 +216,8 @@ export function usePersonSegmentation(
 
     let cancelled = false
     let animationFrame = 0
+    let videoFrameCallback = 0
+    let videoFrameSource: HTMLVideoElement | null = null
     let landmarker: PoseLandmarker | null = null
     let lastInferenceAt = -Infinity
     let lastResultAt = performance.now()
@@ -218,54 +226,91 @@ export function usePersonSegmentation(
     let candidateFrames = 0
     let lockEngaged = false
     let lockFrames = 0
-    let lockInvalidSinceMs: number | null = null
+    const diagnosticsEnabled =
+      new URLSearchParams(window.location.search).get('trackingDebug') === '1'
+    let diagnosticsStartedAt = performance.now()
+    let inferenceCount = 0
+    let inferenceTotalMs = 0
+    let inferenceMaxMs = 0
+    let detectedCount = 0
+    let centerCovered = false
+    let maskStats = {
+      averageConfidence: 0,
+      centerConfidence: 0,
+      coverage: 0,
+      maxConfidence: 0,
+    }
+    let bodyVisibility = 0
+    let lockEvidence = 'no pose'
+    let hitEvidence = 'none'
     const highlightCanvas = highlightCanvasRef.current
 
     const resetLock = () => {
       lockEngaged = false
       lockFrames = 0
-      lockInvalidSinceMs = null
     }
 
     countRef.current = 0
     targetLockedRef.current = false
     setTracking({ state: 'loading', count: 0, targetLocked: false })
 
-    const trackPeople = (timestamp: number) => {
-      if (cancelled || !landmarker) return
-      animationFrame = window.requestAnimationFrame(trackPeople)
+    const logDiagnostics = (
+      nowMs: number,
+      video: HTMLVideoElement | null,
+    ) => {
+      const elapsedMs = nowMs - diagnosticsStartedAt
+      if (!diagnosticsEnabled || elapsedMs < DIAGNOSTICS_INTERVAL_MS) return
 
-      const video = videoRef.current
+      console.info('[targeting] metrics', {
+        inferenceFps: Number(((inferenceCount * 1_000) / elapsedMs).toFixed(1)),
+        averagePipelineMs:
+          inferenceCount === 0
+            ? null
+            : Number((inferenceTotalMs / inferenceCount).toFixed(1)),
+        maxPipelineMs: Number(inferenceMaxMs.toFixed(1)),
+        lastResultAgeMs: Number((nowMs - lastResultAt).toFixed(1)),
+        videoTime: video ? Number(video.currentTime.toFixed(3)) : null,
+        videoPaused: video?.paused ?? null,
+        detectedCount,
+        confirmedCount: countRef.current,
+        centerCovered,
+        maskAverageConfidence: Number(maskStats.averageConfidence.toFixed(3)),
+        maskCenterConfidence: Number(maskStats.centerConfidence.toFixed(3)),
+        maskCoverage: Number(maskStats.coverage.toFixed(3)),
+        maskMaxConfidence: Number(maskStats.maxConfidence.toFixed(3)),
+        fullBodyVisibility: Number(bodyVisibility.toFixed(3)),
+        lockEvidence,
+        hitEvidence,
+        targetLocked: targetLockedRef.current,
+        frameScheduler: videoFrameSource ? 'video frame' : 'animation frame',
+      })
+      diagnosticsStartedAt = nowMs
+      inferenceCount = 0
+      inferenceTotalMs = 0
+      inferenceMaxMs = 0
+    }
+
+    const runInference = (video: HTMLVideoElement, timestamp: number) => {
+      const currentLandmarker = landmarker
       if (
-        timestamp - lastResultAt > STALE_VIDEO_MS &&
-        (countRef.current !== 0 || targetLockedRef.current)
-      ) {
-        countRef.current = 0
-        targetLockedRef.current = false
-        candidateCount = 0
-        candidateFrames = 0
-        resetLock()
-        clearHighlight(highlightCanvas)
-        setTracking({ state: 'tracking', count: 0, targetLocked: false })
-      }
-      if (
-        !video ||
+        !currentLandmarker ||
         video.paused ||
         video.ended ||
         video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
-        video.currentTime === lastVideoTime ||
         timestamp - lastInferenceAt < INFERENCE_INTERVAL_MS
       ) {
         return
       }
 
       lastInferenceAt = timestamp
-      lastVideoTime = video.currentTime
 
       try {
-        landmarker.detectForVideo(video, timestamp, (result) => {
+        const inferenceStartedAt = performance.now()
+        const result = currentLandmarker.detectForVideo(video, timestamp)
+        const masks = result.segmentationMasks ?? []
+        try {
           lastResultAt = performance.now()
-          const detectedCount = result.landmarks.length
+          detectedCount = result.landmarks.length
           if (detectedCount === candidateCount) {
             candidateFrames += 1
           } else {
@@ -277,7 +322,6 @@ export function usePersonSegmentation(
               ? candidateCount
               : countRef.current
 
-          const masks = result.segmentationMasks ?? []
           let render: HighlightRender | null = null
           if (highlightCanvas && detectedCount > 0 && masks.length > 0) {
             render = renderHighlight(highlightCanvas, masks)
@@ -285,30 +329,69 @@ export function usePersonSegmentation(
             clearHighlight(highlightCanvas)
           }
 
-          const centerCovered =
-            (render !== null && maskCoversCenter(render)) ||
-            poseCoversCenter(result.landmarks)
-          const confidence =
-            detectedCount === 1 ? coreConfidence(result.landmarks[0]) : 0
-          const usable =
-            detectedCount === 1 &&
-            centerCovered &&
-            confidence >=
-              (lockEngaged ? LOCK_RELEASE_CONFIDENCE : LOCK_ACQUIRE_CONFIDENCE)
-          const nowMs = performance.now()
-
-          if (lockEngaged) {
-            if (usable) {
-              lockInvalidSinceMs = null
-            } else {
-              lockInvalidSinceMs ??= nowMs
-              if (nowMs - lockInvalidSinceMs > LOCK_GRACE_MS) resetLock()
+          maskStats =
+            render === null
+              ? {
+                  averageConfidence: 0,
+                  centerConfidence: 0,
+                  coverage: 0,
+                  maxConfidence: 0,
+                }
+              : centerMaskStats(render)
+          centerCovered =
+            maskStats.centerConfidence >= LOCK_MASK_THRESHOLD &&
+            maskStats.coverage >= LOCK_REGION_MIN_COVERAGE
+          hitEvidence = centerCovered ? 'segmentation mask' : 'none'
+          bodyVisibility =
+            detectedCount === 1
+              ? fullBodyVisibility(result.landmarks[0])
+              : 0
+          if (diagnosticsEnabled && highlightCanvas) {
+            highlightCanvas.dataset.maskAverageConfidence =
+              maskStats.averageConfidence.toFixed(3)
+            highlightCanvas.dataset.maskCenterConfidence =
+              maskStats.centerConfidence.toFixed(3)
+            highlightCanvas.dataset.maskCoverage = maskStats.coverage.toFixed(3)
+            highlightCanvas.dataset.maskMaxConfidence =
+              maskStats.maxConfidence.toFixed(3)
+            highlightCanvas.dataset.fullBodyVisibility =
+              bodyVisibility.toFixed(3)
+            if (render) {
+              let peakConfidence = 0
+              let peakPixel = 0
+              for (let pixel = 0; pixel < render.width * render.height; pixel += 1) {
+                for (const data of render.maskData) {
+                  const pixelConfidence = data[pixel] ?? 0
+                  if (pixelConfidence <= peakConfidence) continue
+                  peakConfidence = pixelConfidence
+                  peakPixel = pixel
+                }
+              }
+              highlightCanvas.dataset.maskPeakConfidence =
+                peakConfidence.toFixed(3)
+              highlightCanvas.dataset.maskPeakX = (
+                (peakPixel % render.width) /
+                render.width
+              ).toFixed(3)
+              highlightCanvas.dataset.maskPeakY = (
+                Math.floor(peakPixel / render.width) /
+                render.height
+              ).toFixed(3)
             }
+          }
+          const usable = detectedCount === 1 && centerCovered
+          lockEvidence =
+            detectedCount !== 1
+              ? `pose count ${detectedCount}`
+              : !centerCovered
+                ? 'off center'
+                : 'eligible'
+          if (lockEngaged) {
+            if (!usable) resetLock()
           } else if (usable) {
             lockFrames += 1
             if (lockFrames >= LOCK_ACQUIRE_FRAMES) {
               lockEngaged = true
-              lockInvalidSinceMs = null
             }
           } else {
             lockFrames = 0
@@ -323,14 +406,59 @@ export function usePersonSegmentation(
             targetLockedRef.current = targetLocked
             setTracking({ state: 'tracking', count, targetLocked })
           }
-        })
-      } catch {
+        } finally {
+          for (const mask of masks) mask.close()
+        }
+        const inferenceMs = performance.now() - inferenceStartedAt
+        inferenceCount += 1
+        inferenceTotalMs += inferenceMs
+        inferenceMaxMs = Math.max(inferenceMaxMs, inferenceMs)
+      } catch (error) {
+        console.error('[targeting] Inference failed.', error)
         cancelled = true
-        landmarker.close()
+        currentLandmarker.close()
         landmarker = null
         clearHighlight(highlightCanvas)
         setTracking({ state: 'error', count: 0, targetLocked: false })
       }
+    }
+
+    // Live camera currentTime can stall even while frames are being presented,
+    // so use the browser's frame-delivery callback whenever it is available.
+    const trackVideoFrame = (timestamp: number) => {
+      const video = videoFrameSource
+      if (cancelled || !landmarker || !video) return
+      runInference(video, timestamp)
+      if (!cancelled && landmarker) {
+        videoFrameCallback = video.requestVideoFrameCallback(trackVideoFrame)
+      }
+    }
+
+    // This loop remains as the stale-stream watchdog and older-browser fallback.
+    const trackPeople = (timestamp: number) => {
+      if (cancelled || !landmarker) return
+      animationFrame = window.requestAnimationFrame(trackPeople)
+
+      const video = videoRef.current
+      logDiagnostics(timestamp, video)
+      if (
+        timestamp - lastResultAt > STALE_VIDEO_MS &&
+        (countRef.current !== 0 || targetLockedRef.current)
+      ) {
+        countRef.current = 0
+        targetLockedRef.current = false
+        candidateCount = 0
+        candidateFrames = 0
+        resetLock()
+        clearHighlight(highlightCanvas)
+        setTracking({ state: 'tracking', count: 0, targetLocked: false })
+      }
+      if (!video || videoFrameSource || video.currentTime === lastVideoTime) {
+        return
+      }
+
+      lastVideoTime = video.currentTime
+      runInference(video, timestamp)
     }
 
     const startTracking = async () => {
@@ -342,9 +470,15 @@ export function usePersonSegmentation(
         }
 
         landmarker = instance
+        const video = videoRef.current
+        if (video && typeof video.requestVideoFrameCallback === 'function') {
+          videoFrameSource = video
+          videoFrameCallback = video.requestVideoFrameCallback(trackVideoFrame)
+        }
         setTracking({ state: 'tracking', count: 0, targetLocked: false })
         animationFrame = window.requestAnimationFrame(trackPeople)
-      } catch {
+      } catch (error) {
+        console.error('[targeting] Initialization failed.', error)
         if (!cancelled) {
           setTracking({ state: 'error', count: 0, targetLocked: false })
         }
@@ -356,6 +490,9 @@ export function usePersonSegmentation(
     return () => {
       cancelled = true
       window.cancelAnimationFrame(animationFrame)
+      if (videoFrameSource && videoFrameCallback) {
+        videoFrameSource.cancelVideoFrameCallback(videoFrameCallback)
+      }
       landmarker?.close()
       clearHighlight(highlightCanvas)
     }

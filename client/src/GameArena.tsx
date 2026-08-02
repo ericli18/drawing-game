@@ -23,6 +23,7 @@ import {
   usePersonSegmentation,
   type PersonTrackingState,
 } from './usePersonSegmentation'
+import { SPELL_LABELS } from './spellLabels'
 
 /* ─────────────────────────────────────────────────────────
  * INTERACTION STORYBOARD
@@ -91,7 +92,7 @@ type MatchNotice = {
   id: number
   tone: NoticeTone
   title: string
-  detail: string
+  detail?: string
 }
 
 type ShotFeedback = {
@@ -362,8 +363,6 @@ export function GameArena({
     cameraState === 'ready' &&
     personTrackingState === 'tracking'
   const serverReady = localPlayer?.ready
-  // The lock already requires exactly one confirmed person; checking the raw
-  // count here would break the lock's flicker-grace window.
   const playerReady = targetingReady && targetLocked
   const canFire = Boolean(
     matchLive &&
@@ -405,7 +404,7 @@ export function GameArena({
   }, [clearDrawing, state?.phase, state?.startsAt])
 
   const showNotice = useCallback(
-    (title: string, detail: string, tone: NoticeTone = 'neutral') => {
+    (title: string, detail?: string, tone: NoticeTone = 'neutral') => {
       window.clearTimeout(noticeTimerRef.current)
       setNotice({ id: Date.now(), tone, title, detail })
       noticeTimerRef.current = window.setTimeout(
@@ -469,12 +468,10 @@ export function GameArena({
     resolveCast(result.accepted)
 
     if (result.accepted) {
-      const spellName = result.drawingType ?? 'spell'
-      showNotice(
-        `${spellName.charAt(0).toUpperCase()}${spellName.slice(1)} cast`,
-        spellName === 'loop' ? 'Ammo refilled.' : 'Glyph locked in.',
-        'success',
-      )
+      const effect = result.drawingType
+        ? SPELL_LABELS[result.drawingType]
+        : 'Spell'
+      showNotice(effect, undefined, 'success')
     } else {
       showNotice(
         'Glyph rejected',
@@ -741,7 +738,7 @@ export function GameArena({
           key={notice.id}
         >
           <strong>{notice.title}</strong>
-          <span>{notice.detail}</span>
+          {notice.detail ? <span>{notice.detail}</span> : null}
         </section>
       ) : null}
 

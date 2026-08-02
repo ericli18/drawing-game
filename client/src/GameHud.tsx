@@ -1,4 +1,5 @@
 import { SpellGlyph, type SpellKind } from './SpellGlyph'
+import { SPELL_LABELS } from './spellLabels'
 
 const SPELL_ORDER: readonly SpellKind[] = [
   'plus',
@@ -8,15 +9,6 @@ const SPELL_ORDER: readonly SpellKind[] = [
   'triangle',
   'loop',
 ]
-
-const SPELL_LABELS: Record<SpellKind, string> = {
-  plus: 'Rapid fire',
-  minus: 'Slow',
-  circle: 'Shield',
-  star: 'Blind',
-  triangle: 'Reflect',
-  loop: 'Reload',
-}
 
 export type SpellPhase = 'ready' | 'active' | 'cooldown'
 
